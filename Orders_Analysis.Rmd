@@ -3,39 +3,276 @@ title: "Orders Analysis"
 subtitle: <u>1. Practical examples of using R in Supply Chain Management.</u>
 author: "**autor**: Maciej Lecicki"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
-output:
-  html_document:
-    theme: spacelab
-    highlight: tango
-    toc: true
-    toc_float:
-      collapsed: false
-      smooth_scroll: true 
-    include:
-      in_header: header.html
-      after_body: footer.html
+output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE, include = TRUE, warning = FALSE, message = FALSE, fig.pos = "H")
 ```
 
-## R Markdown
+```{r list of libraries}
+library(arules)
+library(arulesCBA)
+library(arulesViz)
+library(htmlwidgets)
+library(tidyverse)
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+### Associations between Items
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+Study of associationS between Brands is a first of a 2-step allocation process, where products are grouped together in a consolidation DC (there's more than 1 consolidation DC in a SC network used for distribution of products to local DCs).\newline
+
+First step is to aggregate items in our basket data-set to Brand. This process reduces the size of the data-set and will decrease its sparsity. \newline 
+Let's visualize this on a sparsity matrix and display basic statistics.
+
+```{r items_associtation_prep}
+market_order <- read.transactions("data/basket_data.csv",
+                                  format = "single",
+                                  sep = ",",
+                                  header = TRUE,
+                                  cols = c("Document", "Product"))
+
+length(market_order)
+size(market_order)
+inspect(head(market_order))
+
+# remove transactions with 1 Item
+
+market_order_filter <- market_order[size(market_order) > 1]
+
+length(market_order_filter)
+size(market_order_filter)
+inspect(head(market_order_filter))
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r brands_basic_statistics, include = TRUE}
+summary(market_order_filter)
+```
+
+
+Before we perform MBA, we need to define values of parameters for association rules (in other words, we need to decide on measures values). \newline
+It's an important step as it will define the number of association rules and therefore granularity of analysis and its outcome. It is recommended to use expertise knowledge to find the optimal number applicable to a given business environment.\newline
+
+This task is usually done on the basis of Confidence and Support. Let's define a grid of parameters and investigate thresholds that will help us select optimal number of rules.\newline
+Results are presented in Figure 49.
+
+```{r parameters_grid}
+# selecting support & confidence level parameters
+
+supp_lev <- seq(from = 0.01, to = 0.2, by = 0.01)
+conf_lev <- seq(from = 0.1, to = 0.9, by = 0.05)
+
+par_check <- expand.grid(supp_level = supp_lev, 
+                         conf_level = conf_lev)
+
+par_check <- cbind(par_check,
+                   count = NA)
+
+for (i in 1:nrow(par_check)) {
+  par_check[i, 3] =
+    length(apriori(market_order_filter,
+                   parameter = list(supp = par_check[i, 1],
+                                    conf = par_check[i, 2],
+                                    target = "rules")))
+}
+
+
+par_check_filter <- par_check %>%
+  as_tibble() %>%
+  filter(count > 10) %>%
+  mutate(
+    supp_level = as.character(supp_level),
+    conf_level = as.character(conf_level)) %>%
+  unite(col = par_pair,
+        supp_level, 
+        conf_level,
+        remove = FALSE)
+```
+
+```{r threshold_plot, include = TRUE, fig.cap = "Number of association rules between Brands based on combination of Support and Confidence levels.", out.extra = ''}
+
+ggplot(par_check_filter,
+       aes(x = par_pair,
+           y = count)) +
+  geom_col() +
+  theme(
+    axis.text.x = element_text(angle = 90,
+                               size = 7)
+  ) +
+  labs(title = "Number of association rules by parameters value",
+       x =  "Support_Confidence levels",
+       y = "Number of association rules")
+
+```
+
+<!-- market_order <- read.transactions("data/basket_data.csv", -->
+<!--                                   format = "single", -->
+<!--                                   sep = ",", -->
+<!--                                   header = TRUE, -->
+<!--                                   cols = c("Document", "Product")) -->
+
+<!-- length(market_order) -->
+
+<!-- size(market_order) -->
+
+<!-- inspect(head(market_order)) -->
+
+<!-- # remove transactions with 1 Item -->
+
+<!-- market_order_filter <- market_order[size(market_order) > 1] -->
+
+<!-- length(market_order_filter) -->
+
+<!-- size(market_order_filter) -->
+
+<!-- inspect(head(market_order_filter)) -->
+
+
+<!-- summary(market_order_filter) -->
+
+<!-- # co-occurence matrix - chiSquared: coexistance test which returns p-value -->
+<!-- # HO: co-occurence of rows & columns (items) is independent (p-value > alpha) -->
+<!-- # HA: co-occurence of rows & columns (items) is dependent of each other (p-value < alpha) -->
+
+<!-- crossTable(market_order_filter, measure = "chiSquared", sort = TRUE)[1:8, 1:8] -->
+<!-- # co-occurance of some items is dependent of each other -->
+
+<!-- # let's see transactions sparsity -->
+<!-- image(market_order_filter) -->
+
+<!-- # most frequent items -->
+<!-- crossTable(market_order_filter, sort = TRUE)[1:10, 1:10] -->
+
+<!-- # frequency plots -->
+<!-- itemFrequencyPlot(market_order_filter, -->
+<!--                   topN = 10, -->
+<!--                   main = "Absolute Product Frequency", -->
+<!--                   type = "absolute", -->
+<!--                   horiz = TRUE, -->
+<!--                   col = "orange") -->
+
+<!-- # barplot(sort(table(unlist(LIST(market_order_filter))), decreasing = TRUE)[1:10], -->
+<!-- #         horiz = TRUE, las = 1, col = "steelblue3") -->
+
+<!-- # Key association measures: -->
+
+<!-- # 1. Support (popularity of item(set) ) -->
+<!-- #    fraction (percentage) of all transactions that contain given item(set) -->
+
+<!-- # 2. Confidence (how often the rule is true) -->
+<!-- #    shows the percentage in which Y is bought together with X -->
+
+<!-- # 3. Lift (how strong is the association) -->
+<!-- #   lift > 1: Y is likely to be bought when X is bougth -->
+<!-- #   lift < 1: Y is unlikely to be bought when X is bougth -->
+
+<!-- # Count tells how many times given item(set) appeared in all transactions -->
+
+<!-- # selecting support & confidence level parameters -->
+
+<!-- supp_lev <- seq(from = 0.005, to = 0.02, by = 0.001) -->
+<!-- conf_lev <- seq(from = 0.1, to = 0.9, by = 0.05) -->
+
+<!-- par_check <- expand.grid(supp_level = supp_lev,  -->
+<!--                          conf_level = conf_lev) -->
+
+<!-- par_check <- cbind(par_check, -->
+<!--                    count = NA) -->
+
+<!-- for (i in 1:nrow(par_check)) { -->
+<!--   par_check[i, 3] = -->
+<!--     length(apriori(market_order_filter, -->
+<!--                    parameter = list(supp = par_check[i, 1], -->
+<!--                                   conf = par_check[i, 2], -->
+<!--                                   target = "rules"))) -->
+<!-- } -->
+
+
+<!-- par_check_filter <- par_check %>% -->
+<!--   as_tibble() %>% -->
+<!--   filter(count > 10) %>% -->
+<!--   mutate( -->
+<!--     supp_level = as.character(supp_level), -->
+<!--     conf_level = as.character(conf_level)) %>% -->
+<!--   unite(col = par_pair, -->
+<!--           supp_level,  -->
+<!--           conf_level, -->
+<!--           remove = FALSE) -->
+
+<!-- ggplot(par_check_filter, -->
+<!--        aes(x = par_pair, -->
+<!--            y = count)) + -->
+<!--   geom_col() + -->
+<!--   theme( -->
+<!--     axis.text.x = element_text(angle = 90, -->
+<!--                                size = 7) -->
+<!--   ) + -->
+<!--   labs(title = "Number of association rules by parameters value", -->
+<!--        x =  "Support_Confidence levels", -->
+<!--        y = "Number of association rules") -->
+
+<!-- # apriori function for frequent itemsets with -->
+<!-- # support = 0.01, -->
+<!-- # confidence = 0.3 -->
+
+<!-- trans_frequent = apriori(market_order_filter, -->
+<!--                          parameter = list( -->
+<!--                            supp = 0.01, -->
+<!--                            conf = 0.3, -->
+<!--                            minlen = 2, -->
+<!--                            target = "frequent itemsets") -->
+<!--                          ) -->
+
+<!-- # retrieve results -->
+<!-- inspect(sort(trans_frequent, by = "support")) -->
+
+<!-- # apriori function for rules -->
+
+<!-- trans_rules = apriori(market_order_filter, -->
+<!--                          parameter = list( -->
+<!--                            supp = 0.01, -->
+<!--                            conf = 0.3, -->
+<!--                            minlen = 2, -->
+<!--                            target = "rules"), -->
+<!--                       control = list(verbose = FALSE) -->
+<!-- ) -->
+
+<!-- inspect(sort(trans_rules, by = "lift")) -->
+
+<!-- # subsetting rules (example) -->
+
+<!-- inspect(subset(trans_frequent, -->
+<!--                subset = items %in% c("A338HC") & support > 0.01) -->
+<!--         ) -->
+
+<!-- # interactive visualization of rules -->
+
+<!-- # summary -->
+<!-- plot(trans_rules, engine = "plotly") -->
+
+<!-- #interactive product selection -->
+<!-- inspectDT(trans_rules) -->
+
+<!-- #graph -->
+<!-- plot(trans_rules, method = "graph", -->
+<!--      engine = "htmlwidget") -->
+
+<!-- # to save widget -->
+
+<!-- # rules_html = plot(trans_rules, method = "graph", -->
+<!-- #                   engine = "htmlwidget") -->
+<!-- # saveWidget(rules_html, file = "trans_rules.html") -->
+<!-- # saveAsGraph(rules_html, file = "trans_rules.graphml") -->
+
+<!-- # grouped rules -->
+<!-- plot(trans_rules, method = "grouped", measure = "lift", shading = "confidence") -->
+
+<!-- # parallel coordinates plot -->
+<!-- plot(trans_rules, method = "paracoord") -->
+<!-- # not applicable here as association rules are 1:1 -->
+
+<!-- # Shiny app -->
+<!-- ruleExplorer(trans_rules) -->
