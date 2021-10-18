@@ -11,8 +11,11 @@ knitr::opts_chunk$set(echo = TRUE, include = TRUE, warning = FALSE, message = FA
 ```
 
 
-Market Basket Analysis is a very helpful technique commonly used by retailers to uncover associations between items. \newline
-The idea is to define certain (probability) rules and on that basis identify if products (items) occur together in a transaction (basket). It's a very intuitive analysis based on 3 key measures: Support, Lift and Confidence (4th measure, Expected Confidence, can be also considered) and therefore is easy understand and outcome is easy to explain. \newline
+Association Rules, commonly called Market Basket Analysis is a very helpful technique commonly used by retailers to uncover associations between items. \newline
+The idea is to define certain (probability) rules and on that basis identify likelihood that given products' (items) will appear in the same transaction (basket).
+Most common and intuitive example of products that are bought together is bread and butter.
+
+Market Basket Analysis is based on three key measures: Support, Lift and Confidence (4th measure, Expected Confidence, can be also considered) and therefore is easy understand and outcome is easy to explain to stakeholders. \newline
 Description of key measures: 
 
 * Support can be desribed as popularity of item(set); it's a fraction (percentage) of all transactions that contain given item(set),
@@ -28,7 +31,7 @@ Market Basket Analysis can also be applied to supply chain management, specifica
 The scope of the analysis in this chapter is customers orders dispatched from 4 different consolidation DCs. The purpose is to investigate if there are any associations between products which can be foundation for SKUs allocation to consolidation DC and further grouping them together at particular warehouse location (shelf) in order to streamline distribution process and reduce warehouse handling costs related to dispatch process.\newline
 
 
-Let's upload required packages and data with customer orders in required format.
+Let's first upload required packages.
 
 ```{r ch4_lib_data, echo = TRUE, include = TRUE}
 library(arules)
@@ -36,13 +39,20 @@ library(arulesCBA)
 library(arulesViz)
 library(htmlwidgets)
 library(tidyverse)
+```
 
-market_order <- read.transactions("data_basket/basket_data.csv",
+
+Next step is to bring in data with customers' orders in required format.
+We'll use read.transaction function from arules library.
+
+```{r data_upload, echo = TRUE, include = TRUE}
+market_order <- read.transactions("data/basket_data.csv",
                                   format = "single",
                                   sep = ",",
                                   header = TRUE,
                                   cols = c("Document", "Product"))
 ```
+
 
 \pagebreak
 We can summarize the data to display some simple statistics like number of transactions (orders), their size or most frequent items (SKUs).
