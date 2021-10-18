@@ -10,34 +10,53 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE, include = TRUE, warning = FALSE, message = FALSE, fig.pos = "H")
 ```
 
-```{r list of libraries}
+
+Market Basket Analysis is a very helpful technique commonly used by retailers to uncover associations between items. \newline
+The idea is to define certain (probability) rules and on that basis identify if products (items) occur together in a transaction (basket). It's a very intuitive analysis based on 3 key measures: Support, Lift and Confidence (4th measure, Expected Confidence, can be also considered) and therefore is easy understand and outcome is easy to explain. \newline
+Description of key measures: 
+
+* Support can be desribed as popularity of item(set); it's a fraction (percentage) of all transactions that contain given item(set),
+* Confidence tells us how often the rule is true; it shows the percentage in which item B is bought together with item A,
+* Lift is an indicator of association strength: 
+  - lift > 1: B is likely to be occur together with A
+  - lift < 1: B is unlikely to occurr together with A
+
+
+The key challenge when performing Market Basket was the size of data to process. Recently it has become less problematic due to increase of computational power, however it can still be a problem when summarizing or visualizing results if rules parameters are incorrect.\newline
+
+Market Basket Analysis can also be applied to supply chain management, specifically to logistics and warehousing. \newline 
+The scope of the analysis in this chapter is customers orders dispatched from 4 different consolidation DCs. The purpose is to investigate if there are any associations between products which can be foundation for SKUs allocation to consolidation DC and further grouping them together at particular warehouse location (shelf) in order to streamline distribution process and reduce warehouse handling costs related to dispatch process.\newline
+
+
+Let's upload required packages and data with customer orders in required format.
+
+```{r ch4_lib_data, echo = TRUE, include = TRUE}
 library(arules)
 library(arulesCBA)
 library(arulesViz)
 library(htmlwidgets)
 library(tidyverse)
 
-
-```
-
-
-### Associations between Items
-
-Study of associationS between Brands is a first of a 2-step allocation process, where products are grouped together in a consolidation DC (there's more than 1 consolidation DC in a SC network used for distribution of products to local DCs).\newline
-
-First step is to aggregate items in our basket data-set to Brand. This process reduces the size of the data-set and will decrease its sparsity. \newline 
-Let's visualize this on a sparsity matrix and display basic statistics.
-
-```{r items_associtation_prep}
-market_order <- read.transactions("data/basket_data.csv",
+market_order <- read.transactions("data_basket/basket_data.csv",
                                   format = "single",
                                   sep = ",",
                                   header = TRUE,
                                   cols = c("Document", "Product"))
+```
 
-length(market_order)
-size(market_order)
-inspect(head(market_order))
+\pagebreak
+We can summarize the data to display some simple statistics like number of transactions (orders), their size or most frequent items (SKUs).
+
+```{r basket_summary, echo = TRUE, include = TRUE}
+summary(market_order)
+```
+\pagebreak
+There's 844 transactions (customer orders) and 486 items (products).\newline
+We can see that there's a handful of orders with only one item. 
+Let's remove them.
+
+
+```{r remove_orders_with_one_item}
 
 # remove transactions with 1 Item
 
