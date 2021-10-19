@@ -255,6 +255,8 @@ trans_rules <- apriori(market_order_filter,
                            target = "rules"),
                       control = list(verbose = FALSE)
 )
+
+saveRDS(trans_rules, file = 'data/trans_rules.RDS')
 ```
 
 ```{r trans_rules_inspect, results = FALSE}
