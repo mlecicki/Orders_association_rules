@@ -5,7 +5,6 @@ author: "**author**: Maciej Lecicki"
 date: "`r format(Sys.time(), '%d.%m.%Y')`"
 output:
   html_document:
-    keep_md: true
     theme: spacelab
     highlight: tango
     toc: true
