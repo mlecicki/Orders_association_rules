@@ -294,14 +294,14 @@ Association rules can be visualized. In addition to that, good level of interact
 
 * plot
 ```{r interactive_plot}
-plot(trans_rules, engine = "default")
+plot(trans_rules, engine = "plotly")
 ```
 
 * graph
 
 ```{r}
 plot(trans_rules, method = "graph",
-     engine = "default")
+     engine = "htmlwidget")
 ```
 
 Html widgets can be saved for future use:
