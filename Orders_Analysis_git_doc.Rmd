@@ -1,0 +1,328 @@
+---
+title: "**Orders Analysis with Association Rules**"
+author: "**author**: Maciej Lecicki"
+date: "`r format(Sys.time(), '%d.%m.%Y')`"
+output: github_document
+always_allow_html: true
+---
+
+
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, include = TRUE, warning = FALSE, message = FALSE, fig.pos = "H")
+```
+
+### **Association Rules Mining**
+<br/>
+
+Association Rules Mining, commonly called Market Basket Analysis is a very helpful technique commonly used by retailers to uncover associations between items.
+The idea is to define certain (probability) rules and on that basis identify likelihood that given products' (items) will appear in the same transaction (basket).
+Most common and intuitive example of products that are bought together is bread and butter.
+
+Market Basket Analysis is based on three key measures: Support, Lift and Confidence (4th measure, Expected Confidence, can be also considered) and therefore is easy understand and outcome is easy to explain to stakeholders.
+Description of key measures: 
+
+* Support can be described as popularity of item(set); it's a fraction (percentage) of all transactions that contain given item(set),
+* Confidence tells us how often the rule is true; it shows the percentage in which item B co-occur with item A,
+* Lift is an indicator of association strength: 
+  - lift > 1: B is likely to co-occur with A
+  - lift < 1: B is unlikely to co-occur with A
+
+
+The key challenge when performing Market Basket was the size of data to process. Recently it has become less problematic due to increase of computational power, however it can still be a problem when summarizing or visualizing results if rules parameters are incorrect.
+
+
+### **Association Rules Mining in Supply Chain Management**
+
+
+Market Basket Analysis can also be applied to supply chain management, specifically to logistics and warehousing. 
+The scope of the analysis are customers orders dispatched from a consolidation DC.
+
+The purpose is to investigate if there are any associations between products which can be foundation for SKUs placement in the same area of the DC in order to streamline shipping process and reduce warehouse handling costs related to order preparation process.
+
+
+### **Analysis**
+
+
+##### Required packages and dataset
+
+
+
+Let's first upload required packages to perform this analysis.
+
+```{r ch4_lib_data}
+library(arules)
+library(arulesCBA)
+library(arulesViz)
+library(htmlwidgets)
+library(tidyverse)
+```
+
+
+Next step is to bring in data with customers' orders in required format.
+We'll use read.transaction function from 'arules' library.
+
+```{r data_upload}
+market_order <- read.transactions("data/basket_data.csv",
+                                  format = "single",
+                                  sep = ",",
+                                  header = TRUE,
+                                  cols = c("Document", "Product"))
+```
+
+
+##### Data exploration
+
+
+We can summarize the data to display some simple statistics like number of transactions (orders), their size or most frequent items (SKUs). We could use length() and size() function, however good alternative is summary() which returns enriched piece of information.
+
+```{r basket_summary}
+summary(market_order)
+```
+
+There's 844 transactions (customer orders) and 486 items (products).
+We can see that there's a handful of orders (transactions) with only one item. 
+Let's remove them.
+
+```{r remove_orders_with_one_item}
+
+market_order_filter <- market_order[size(market_order) > 1]
+
+summary(market_order_filter)
+
+```
+Number of transactions has reduced significantly.
+
+Structure of transactions data can be inspected with inspect() function.
+
+```{r}
+inspect(head(market_order_filter)[1:3])
+```
+
+
+At this stage we should perform Chi-Square test to check if co-occurrence of (at least some) items is dependent or not.
+
+HO: co-occurrence of rows & columns (items) is independent (p-value > alpha)
+
+HA: co-occurrence of rows & columns (items) is dependent of each other (p-value < alpha)
+
+```{r}
+crossTable(market_order_filter, measure = "chiSquared", sort = TRUE)[1:10, 1:10]
+```
+On the basis of visual inspection of sub-matrix made of ten most frequent items we can reject Null Hypothesis (H0) in favor of Alternative Hypothesis as we can find examples of alpha values greater than p-value of 0.05.
+
+
+Let's see transactions sparsity.
+```{r}
+image(market_order_filter)
+
+```
+
+
+Most frequent items can also be visualized.
+```{r}
+itemFrequencyPlot(market_order_filter,
+                  topN = 10,
+                  main = "Absolute Product Frequency",
+                  type = "absolute",
+                  horiz = TRUE,
+                  col = "orange")
+```
+
+
+##### Association Rules Mining
+
+
+Having confirmed co-occurrence of items we can perform Association Rules Mining.
+
+First step is define values of parameters for association rules (in other words, we need to decide on thresholds for key metrics).
+It's an important step when we deal with large datasets as it will define the number of association rules and therefore granularity of analysis and its outcome. It is recommended to use expertise knowledge to find the optimal number applicable to a given business environment, however this process can be supported with visual representation of numbers of expected rules.
+
+This task is usually done on the basis of Confidence and Support. Let's define a grid of parameters and investigate thresholds that will help us select optimal number of rules captured by iterating apriori algorithm over the grid.
+
+```{r parameters_grid, results = FALSE}
+# selecting support & confidence level parameters
+
+supp_lev <- seq(from = 0.01, to = 0.2, by = 0.01)
+conf_lev <- seq(from = 0.1, to = 0.9, by = 0.05)
+
+par_check <- expand.grid(supp_level = supp_lev, 
+                         conf_level = conf_lev) %>%
+  cbind(count = NA)
+
+
+for (i in 1:nrow(par_check)) {
+  par_check[i, 3] =
+    length(apriori(market_order_filter,
+                   parameter = list(supp = par_check[i, 1],
+                                    conf = par_check[i, 2],
+                                    target = "rules")))
+}
+
+```
+
+Let's filter entire dataset to return a pair of association metrics that return
+at least 10 rules.
+
+```{r association_metrics_which_return_at_least_10_rules}
+
+par_check_filter <- par_check %>%
+  as_tibble() %>%
+  filter(count >= 10) %>%
+  mutate(
+    supp_level = as.character(supp_level),
+    conf_level = as.character(conf_level)) %>%
+  unite(col = par_pair,
+        supp_level, 
+        conf_level,
+        remove = FALSE)
+```
+
+Results can be visualized with a help of ggplot package.
+
+```{r threshold_plot, include = TRUE, fig.cap = "Number of association rules between Brands based on combination of Support and Confidence levels.", out.extra = ''}
+
+ggplot(par_check_filter,
+       aes(x = par_pair,
+           y = count)) +
+  geom_col() +
+  theme(
+    axis.text.x = element_text(angle = 90,
+                               size = 7)
+  ) +
+  labs(title = "Number of association rules by parameters value",
+       x =  "Support_Confidence levels",
+       y = "Number of association rules")
+
+```
+
+Let's use support level of 0.01 and confidence of 0.5. In other words, we pick items that appear at least in 1% of all transactions and minimum confidence of 50% that co-occurrence between items is true.
+
+To uncover rules, apriori function (algorithm) is used. What's returned is controlled by target parameter. Let's first set it to 'frequent itemsets', .
+
+```{r products_rules_apriori_frequent_itemsets, results = FALSE}
+trans_frequent <- apriori(market_order_filter,
+                         parameter = list(
+                           supp = 0.01,
+                           conf = 0.5,
+                           target = "frequent itemsets")
+                         )
+```
+
+Results can be retrieved with inspect() function.
+
+```{r products_apriori_inspect, results = FALSE}
+prod_apriori_inspect <- inspect(head(sort(trans_frequent, 
+                                     by = "support")
+                                )
+)
+```
+
+Kable() function offers nice formatting.
+
+```{r products_apriori_inspect_table}
+prod_apriori_inspect %>% 
+  knitr::kable()
+
+```
+
+Setting target to 'rules' allows inspection of association rules and all key metrics they're based on.
+
+```{r products_rules_apriori, results = FALSE}
+trans_rules <- apriori(market_order_filter,
+                         parameter = list(
+                           supp = 0.01,
+                           conf = 0.5,
+                           target = "rules"),
+                      control = list(verbose = FALSE)
+)
+
+#saveRDS(trans_rules, file = 'data/trans_rules.RDS')
+```
+
+```{r trans_rules_inspect, results = FALSE}
+trans_rules_inspect <- inspect(head(
+  sort(
+    trans_rules, 
+    by = "lift")
+  )
+)
+```
+
+```{r trans_rules_inspect_kable}
+trans_rules_inspect %>%
+  knitr::kable()
+```
+
+Rules can also be subset based on certain conditions.
+
+```{r rules_subset, results = FALSE}
+rules_subset <- inspect(subset(trans_frequent,
+                               subset = items %in% c("A338HC") & support > 0.01)
+                        )
+
+```
+
+```{r rules_subset_kable}
+rules_subset %>%
+  knitr::kable()
+```
+
+
+##### Rules visualization
+
+
+Association rules can be visualized. In addition to that, good level of interaction is provided.
+This is github_document hence interactive output cannot be generated. I encourage therefore to run it in R Studio or change yaml output type to 'html_document' (which unfortunately is too big to open in github).
+
+* plot
+```{r interactive_plot}
+plot(trans_rules, engine = "default") # change to 'plotly'
+```
+
+* graph (interactive mode set by 'htmlwidgets' engine is disabled)
+
+```{r}
+plot(trans_rules, method = "graph",
+     engine = "default") # change to 'htmlwidget'
+```
+
+Html widgets can be saved for future use:
+
+```{r}
+
+# rules_html = plot(trans_rules, method = "graph",
+#                   engine = "htmlwidget")
+# saveWidget(rules_html, file = "trans_rules.html")
+# saveAsGraph(rules_html, file = "trans_rules.graphml")
+
+```
+
+* interactive items selection (commented out due to output type)
+
+```{r interactive_items_selection}
+#inspectDT(trans_rules)
+```
+
+
+##### Shiny app
+
+
+Association rules can be also shared with users in the form of web application through Shiny package with one line of code presented below. As it cannot be output in github_document, the code is commented out. Please run it directly in R to see result!
+
+```{r shiny_app}
+#ruleExplorer(trans_rules)
+```
+
+
+### **Summary and Conclusion**
+
+
+Market Basket Analysis, mostly  applied in retail, has proven to have a great potential in Supply Chain Management.
+
+Key benefits of this approach are: 
+
+* unlike 'black box' solutions based on Machine or Deep learning is very intuitive and easy to explain to key stakeholders across the organization as it's based on 3 measures (Support, Confidence and Lift),
+* it can be performed in open source software (R) which also provides front-end for final users in a form of interactive web app.
+
+Identified associations between items can be used to streamline dispatch process and help reduce warehousing costs.
